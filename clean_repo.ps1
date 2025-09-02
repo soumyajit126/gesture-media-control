@@ -1,30 +1,42 @@
-# ---------------------------------------------
-# Clean Git repo: remove .venv and large binaries
-# ---------------------------------------------
+# clean_repo.ps1
+# Safe cleanup of large files and virtual environment from Git history
 
-# Step 1: Backup current branch
-git branch backup-main
+# Activate your virtual environment first
+Write-Host "Make sure your virtual environment is activated and all changes are committed."
+Write-Host "Press Enter to continue..."
+Read-Host
 
-# Step 2: Remove .venv and large binaries from Git history
-git filter-branch --force --index-filter "git rm -r --cached --ignore-unmatch .venv" --prune-empty --tag-name-filter cat -- --all
-git filter-branch --force --index-filter "git rm --cached --ignore-unmatch .venv/Lib/site-packages/cv2/cv2.pyd" --prune-empty --tag-name-filter cat -- --all
-git filter-branch --force --index-filter "git rm --cached --ignore-unmatch .venv/Lib/site-packages/mediapipe/python/opencv_world3410.dll" --prune-empty --tag-name-filter cat -- --all
-git filter-branch --force --index-filter "git rm --cached --ignore-unmatch .venv/Lib/site-packages/jaxlib/jax_common.dll" --prune-empty --tag-name-filter cat -- --all
+# Check git status
+git status
+Write-Host "If there are uncommitted changes, commit or stash them first!"
+Write-Host "Press Enter to continue..."
+Read-Host
 
-# Step 3: Create .gitignore to avoid future issues
-@"
-.venv/
-__pycache__/
-*.pyc
-*.pyd
-*.dll
-"@ | Out-File -Encoding UTF8 .gitignore
+# Install git-filter-repo if not installed
+pip show git-filter-repo > $null 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Installing git-filter-repo..."
+    pip install git-filter-repo
+}
 
+# Remove large files and .venv from history
+Write-Host "Cleaning Git history..."
+git filter-repo --invert-paths --path .venv/ --path *.dll --path *.pyd --path *.pyc
+
+# Add .gitignore entries to prevent future commits of these files
+Write-Host "Updating .gitignore..."
+$gitignorePath = ".gitignore"
+$entries = @(".venv/", "*.dll", "*.pyd", "*.pyc")
+foreach ($entry in $entries) {
+    if (-not (Select-String -Path $gitignorePath -Pattern [regex]::Escape($entry))) {
+        Add-Content -Path $gitignorePath -Value $entry
+    }
+}
+
+# Commit .gitignore changes
 git add .gitignore
-git commit -m "Add .gitignore to ignore virtual env and binaries"
+git commit -m "Update .gitignore to exclude .venv and large binaries"
 
-# Step 4: Force push cleaned repo
-git push origin main --force
-
-Write-Host "`n✅ Repo cleaned and pushed successfully!"
-Write-Host "Backup branch 'backup-main' is available in case anything goes wrong."
+Write-Host "Cleanup complete. You can now force push the cleaned repo:"
+Write-Host "`tgit push origin main --force"
+    
